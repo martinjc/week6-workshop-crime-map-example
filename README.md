@@ -101,7 +101,16 @@ The project is structured as five progressive versions, evolving from a simple, 
 
 ---
 
-## Running the Visualisations
+## Viewing the Visualisations online:
+
+* **Version 1**: [Baseline](https://martinjc.github.io/week6-workshop-crime-map-example/)
+* **Version 2**: [Scaled](https://martinjc.github.io/week6-workshop-crime-map-example/scaled.html)
+* **Version 3**: [Coloured](https://martinjc.github.io/week6-workshop-crime-map-example/coloured.html)
+* **Version 4**: [Interactive](https://martinjc.github.io/week6-workshop-crime-map-example/interactive.html)
+* **Version 5**: [Filtered](https://martinjc.github.io/week6-workshop-crime-map-example/filtered.html)
+
+
+## Running the Visualisations Locally
 
 Because the web pages load the raw CSV files via `fetch()`, run a local HTTP server from the project directory:
 

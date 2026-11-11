@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>South Wales Crime Map (By Crime Type)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #map {
+      width: 100%;
+      height: 100dvh;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+  <script>
+    const CSV_FILES = [
+      'data/2025-09-south-wales-street.csv',
+      'data/2025-10-south-wales-street.csv',
+      'data/2025-11-south-wales-street.csv',
+      'data/2025-12-south-wales-street.csv',
+      'data/2026-01-south-wales-street.csv',
+      'data/2026-02-south-wales-street.csv',
+      'data/2026-03-south-wales-street.csv',
+      'data/2026-04-south-wales-street.csv',
+      'data/2026-05-south-wales-street.csv',
+      'data/2026-06-south-wales-street.csv',
+      'data/2026-07-south-wales-street.csv',
+      'data/2026-08-south-wales-street.csv',
+      'data/2026-09-south-wales-street.csv'
+    ];
+
+    const CRIME_COLORS = {
+      'Violence and sexual offences': '#e11d48',
+      'Anti-social behaviour': '#2563eb',
+      'Public order': '#d97706',
+      'Shoplifting': '#9333ea',
+      'Criminal damage and arson': '#ea580c',
+      'Vehicle crime': '#0891b2',
+      'Other theft': '#16a34a',
+      'Drugs': '#4f46e5',
+      'Burglary': '#db2777',
+      'Other crime': '#64748b',
+      'Possession of weapons': '#b91c1c',
+      'Robbery': '#7c3aed',
+      'Bicycle theft': '#0d9488',
+      'Theft from the person': '#ca8a04'
+    };
+
+    const map = L.map('map', {
+      preferCanvas: true
+    }).setView([51.62, -3.55], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const canvasRenderer = L.canvas({ padding: 0.5 });
+    const markers = [];
+
+    function getRadiusForZoom(zoom) {
+      return Math.max(1.5, 2 * Math.pow(1.35, zoom - 10));
+    }
+
+    let currentRadius = getRadiusForZoom(map.getZoom());
+
+    map.on('zoomend', () => {
+      currentRadius = getRadiusForZoom(map.getZoom());
+      for (let i = 0; i < markers.length; i++) {
+        markers[i]._radius = currentRadius;
+      }
+      canvasRenderer._redraw();
+    });
+
+    async function loadCrimeData() {
+      for (const file of CSV_FILES) {
+        try {
+          const response = await fetch(file);
+          if (!response.ok) continue;
+          const text = await response.text();
+          const lines = text.split('\n');
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line) continue;
+
+            // Columns: Crime ID, Month, Reported by, Falls within, Longitude, Latitude, Location, Crime type, ...
+            let c1 = line.indexOf(',');
+            if (c1 === -1) continue;
+            let c2 = line.indexOf(',', c1 + 1);
+            if (c2 === -1) continue;
+            let c3 = line.indexOf(',', c2 + 1);
+            if (c3 === -1) continue;
+            let c4 = line.indexOf(',', c3 + 1);
+            if (c4 === -1) continue;
+            let c5 = line.indexOf(',', c4 + 1);
+            if (c5 === -1) continue;
+            let c6 = line.indexOf(',', c5 + 1);
+            if (c6 === -1) continue;
+            let c7 = line.indexOf(',', c6 + 1);
+            if (c7 === -1) continue;
+            let c8 = line.indexOf(',', c7 + 1);
+            if (c8 === -1) continue;
+
+            const lon = parseFloat(line.slice(c4 + 1, c5));
+            const lat = parseFloat(line.slice(c5 + 1, c6));
+
+            if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+              const crimeType = line.slice(c7 + 1, c8);
+              const color = CRIME_COLORS[crimeType] || '#dc2626';
+
+              const marker = L.circleMarker([lat, lon], {
+                renderer: canvasRenderer,
+                radius: currentRadius,
+                stroke: false,
+                fillColor: color,
+                fillOpacity: 0.08,
+                interactive: false
+              }).addTo(map);
+              markers.push(marker);
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to load ${file}:`, err);
+        }
+      }
+    }
+
+    loadCrimeData();
+  </script>
+</body>
+</html>
+

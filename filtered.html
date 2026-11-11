@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>South Wales Crime Map (Interactive with Category Filtering)</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    #map {
+      width: 100%;
+      height: 100dvh;
+    }
+
+    /* Legend Control */
+    .legend-panel {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      padding: 12px 14px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      max-height: 85vh;
+      overflow-y: auto;
+      min-width: 250px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #1f2937;
+      user-select: none;
+    }
+    .legend-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .legend-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e5e7eb;
+      font-size: 11px;
+    }
+    .legend-count-total {
+      color: #6b7280;
+    }
+    .legend-btn-group {
+      display: flex;
+      gap: 6px;
+    }
+    .legend-btn {
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 600;
+      color: #374151;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .legend-btn:hover {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 3px 0;
+      padding: 3px 6px;
+      gap: 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .legend-item:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    .legend-item.disabled {
+      opacity: 0.38;
+    }
+    .legend-item.disabled .legend-label {
+      text-decoration: line-through;
+      color: #9ca3af;
+    }
+    .legend-color-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .legend-item.disabled .legend-color-dot {
+      background: transparent !important;
+      border: 2px solid #9ca3af;
+    }
+    .legend-label {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .legend-item-count {
+      color: #6b7280;
+      font-variant-numeric: tabular-nums;
+      font-size: 11px;
+    }
+
+    /* Pop-up Custom Styling */
+    .leaflet-popup-content-wrapper {
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius: 8px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      padding: 0;
+    }
+    .leaflet-popup-content {
+      margin: 12px 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      max-width: 280px;
+      color: #1f2937;
+    }
+    .popup-title {
+      font-weight: 700;
+      font-size: 13px;
+      color: #111827;
+      margin-bottom: 4px;
+    }
+    .popup-subtitle {
+      font-size: 11px;
+      color: #6b7280;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .popup-crimes-list {
+      max-height: 180px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .popup-crime-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .popup-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .popup-crime-name {
+      flex: 1;
+    }
+    .popup-crime-count {
+      font-weight: 600;
+      color: #374151;
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+  <script>
+    const CSV_FILES = [
+      'data/2025-09-south-wales-street.csv',
+      'data/2025-10-south-wales-street.csv',
+      'data/2025-11-south-wales-street.csv',
+      'data/2025-12-south-wales-street.csv',
+      'data/2026-01-south-wales-street.csv',
+      'data/2026-02-south-wales-street.csv',
+      'data/2026-03-south-wales-street.csv',
+      'data/2026-04-south-wales-street.csv',
+      'data/2026-05-south-wales-street.csv',
+      'data/2026-06-south-wales-street.csv',
+      'data/2026-07-south-wales-street.csv',
+      'data/2026-08-south-wales-street.csv',
+      'data/2026-09-south-wales-street.csv'
+    ];
+
+    const CRIME_COLORS = {
+      'Violence and sexual offences': '#e11d48',
+      'Anti-social behaviour': '#2563eb',
+      'Public order': '#d97706',
+      'Shoplifting': '#9333ea',
+      'Criminal damage and arson': '#ea580c',
+      'Vehicle crime': '#0891b2',
+      'Other theft': '#16a34a',
+      'Drugs': '#4f46e5',
+      'Burglary': '#db2777',
+      'Other crime': '#64748b',
+      'Possession of weapons': '#b91c1c',
+      'Robbery': '#7c3aed',
+      'Bicycle theft': '#0d9488',
+      'Theft from the person': '#ca8a04'
+    };
+
+    // Track active/enabled crime categories
+    const activeCategories = new Set(Object.keys(CRIME_COLORS));
+
+    const map = L.map('map', {
+      preferCanvas: true
+    }).setView([51.62, -3.55], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    const canvasRenderer = L.canvas({ padding: 0.5 });
+    const markers = []; // Array of { marker, crimeType }
+
+    function getRadiusForZoom(zoom) {
+      return Math.max(1.5, 2 * Math.pow(1.35, zoom - 10));
+    }
+
+    let currentRadius = getRadiusForZoom(map.getZoom());
+
+    map.on('zoomend', () => {
+      currentRadius = getRadiusForZoom(map.getZoom());
+      for (let i = 0; i < markers.length; i++) {
+        const item = markers[i];
+        if (activeCategories.has(item.crimeType)) {
+          item.marker._radius = currentRadius;
+        }
+      }
+      canvasRenderer._redraw();
+    });
+
+    // Refresh marker visibility based on activeCategories
+    function applyCategoryVisibility() {
+      for (let i = 0; i < markers.length; i++) {
+        const item = markers[i];
+        if (activeCategories.has(item.crimeType)) {
+          item.marker._radius = currentRadius;
+        } else {
+          item.marker._radius = 0;
+        }
+      }
+      canvasRenderer._redraw();
+      updateLegendUI();
+
+      // Close popup if the hovered point is no longer visible
+      if (currentHoverKey !== null) {
+        currentHoverKey = null;
+        map.closePopup(hoverPopup);
+      }
+    }
+
+    // Data structures for hover detection and location crime aggregation
+    const locationsMap = new Map(); // key -> { lat, lon, locationName, total, crimes: { type: count } }
+    const spatialGrid = new Map();  // gridKey -> [locationObj, ...]
+    const GRID_SIZE = 0.01;         // ~1km grid buckets
+
+    function getGridKey(lat, lon) {
+      const gx = Math.floor(lat / GRID_SIZE);
+      const gy = Math.floor(lon / GRID_SIZE);
+      return `${gx}_${gy}`;
+    }
+
+    // Leaflet Popup for hover
+    const hoverPopup = L.popup({
+      closeButton: false,
+      autoPan: false,
+      offset: [0, -6]
+    });
+
+    let currentHoverKey = null;
+
+    map.on('mousemove', (e) => {
+      if (locationsMap.size === 0) return;
+
+      const lat = e.latlng.lat;
+      const lon = e.latlng.lng;
+      const gx = Math.floor(lat / GRID_SIZE);
+      const gy = Math.floor(lon / GRID_SIZE);
+
+      let nearestLoc = null;
+      let minDistance = Infinity;
+      const mouseLayerPoint = e.layerPoint;
+      const maxHitRadius = Math.max(currentRadius + 4, 7);
+
+      // Check adjacent 9 grid cells
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const key = `${gx + dx}_${gy + dy}`;
+          const bucket = spatialGrid.get(key);
+          if (!bucket) continue;
+
+          for (let i = 0; i < bucket.length; i++) {
+            const loc = bucket[i];
+
+            // Only consider locations that have at least one currently active crime
+            let hasActiveCrime = false;
+            for (const crimeType of Object.keys(loc.crimes)) {
+              if (activeCategories.has(crimeType)) {
+                hasActiveCrime = true;
+                break;
+              }
+            }
+            if (!hasActiveCrime) continue;
+
+            const pt = map.latLngToLayerPoint([loc.lat, loc.lon]);
+            const dist = mouseLayerPoint.distanceTo(pt);
+            if (dist <= maxHitRadius && dist < minDistance) {
+              minDistance = dist;
+              nearestLoc = loc;
+            }
+          }
+        }
+      }
+
+      if (nearestLoc) {
+        const locKey = `${nearestLoc.lat},${nearestLoc.lon}`;
+        if (currentHoverKey !== locKey) {
+          currentHoverKey = locKey;
+
+          // Format only active crime breakdown sorted by count descending
+          const sortedActiveCrimes = Object.entries(nearestLoc.crimes)
+            .filter(([type]) => activeCategories.has(type))
+            .sort((a, b) => b[1] - a[1]);
+
+          const activeTotalAtLoc = sortedActiveCrimes.reduce((sum, [, count]) => sum + count, 0);
+
+          let rowsHtml = '';
+          for (const [type, count] of sortedActiveCrimes) {
+            const color = CRIME_COLORS[type] || '#dc2626';
+            rowsHtml += `
+              <li class="popup-crime-row">
+                <span class="popup-dot" style="background-color: ${color}"></span>
+                <span class="popup-crime-name">${type}</span>
+                <span class="popup-crime-count">${count}</span>
+              </li>
+            `;
+          }
+
+          const content = `
+            <div class="popup-title">${nearestLoc.locationName || 'Crime Location'}</div>
+            <div class="popup-subtitle"><strong>${activeTotalAtLoc}</strong> recorded crime${activeTotalAtLoc > 1 ? 's' : ''}</div>
+            <ul class="popup-crimes-list">
+              ${rowsHtml}
+            </ul>
+          `;
+
+          hoverPopup
+            .setLatLng([nearestLoc.lat, nearestLoc.lon])
+            .setContent(content)
+            .openOn(map);
+        }
+      } else {
+        if (currentHoverKey !== null) {
+          currentHoverKey = null;
+          map.closePopup(hoverPopup);
+        }
+      }
+    });
+
+    map.on('mouseout', () => {
+      if (currentHoverKey !== null) {
+        currentHoverKey = null;
+        map.closePopup(hoverPopup);
+      }
+    });
+
+    // Legend Control
+    const legendControl = L.control({ position: 'topright' });
+    const crimeCategoryTotals = {};
+    for (const key of Object.keys(CRIME_COLORS)) {
+      crimeCategoryTotals[key] = 0;
+    }
+
+    legendControl.onAdd = function() {
+      const div = L.DomUtil.create('div', 'legend-panel');
+      div.id = 'crime-legend';
+      div.innerHTML = `
+        <div class="legend-header">
+          <span>Crime Categories</span>
+        </div>
+        <div class="legend-actions">
+          <span class="legend-count-total" id="legend-total">Loading...</span>
+          <div class="legend-btn-group">
+            <button class="legend-btn" id="btn-select-all" type="button">All</button>
+            <button class="legend-btn" id="btn-select-none" type="button">None</button>
+          </div>
+        </div>
+        <div id="legend-items"></div>
+      `;
+      L.DomEvent.disableScrollPropagation(div);
+      L.DomEvent.disableClickPropagation(div);
+      return div;
+    };
+    legendControl.addTo(map);
+
+    function toggleCategory(cat) {
+      if (activeCategories.has(cat)) {
+        activeCategories.delete(cat);
+      } else {
+        activeCategories.add(cat);
+      }
+      applyCategoryVisibility();
+    }
+
+    function selectAllCategories() {
+      for (const cat of Object.keys(CRIME_COLORS)) {
+        activeCategories.add(cat);
+      }
+      applyCategoryVisibility();
+    }
+
+    function selectNoneCategories() {
+      activeCategories.clear();
+      applyCategoryVisibility();
+    }
+
+    function updateLegendUI() {
+      const itemsContainer = document.getElementById('legend-items');
+      const totalContainer = document.getElementById('legend-total');
+      if (!itemsContainer) return;
+
+      const sortedCategories = Object.keys(CRIME_COLORS).sort(
+        (a, b) => (crimeCategoryTotals[b] || 0) - (crimeCategoryTotals[a] || 0)
+      );
+
+      let visibleCount = 0;
+      let totalAllCount = 0;
+      let html = '';
+
+      for (const cat of sortedCategories) {
+        const count = crimeCategoryTotals[cat] || 0;
+        totalAllCount += count;
+        const isActive = activeCategories.has(cat);
+        if (isActive) visibleCount += count;
+        const color = CRIME_COLORS[cat];
+
+        html += `
+          <div class="legend-item ${isActive ? '' : 'disabled'}" data-category="${cat}" title="Click to turn ${isActive ? 'off' : 'on'}">
+            <span class="legend-color-dot" style="background-color: ${color}"></span>
+            <span class="legend-label">${cat}</span>
+            <span class="legend-item-count">${count.toLocaleString()}</span>
+          </div>
+        `;
+      }
+      itemsContainer.innerHTML = html;
+
+      // Attach click events
+      const itemElements = itemsContainer.querySelectorAll('.legend-item');
+      itemElements.forEach(el => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const category = el.getAttribute('data-category');
+          toggleCategory(category);
+        });
+      });
+
+      if (totalContainer) {
+        totalContainer.textContent = `${visibleCount.toLocaleString()} / ${totalAllCount.toLocaleString()} shown`;
+      }
+    }
+
+    async function loadCrimeData() {
+      for (const file of CSV_FILES) {
+        try {
+          const response = await fetch(file);
+          if (!response.ok) continue;
+          const text = await response.text();
+          const lines = text.split('\n');
+
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line) continue;
+
+            // Columns: Crime ID, Month, Reported by, Falls within, Longitude, Latitude, Location, Crime type, ...
+            let c1 = line.indexOf(',');
+            if (c1 === -1) continue;
+            let c2 = line.indexOf(',', c1 + 1);
+            if (c2 === -1) continue;
+            let c3 = line.indexOf(',', c2 + 1);
+            if (c3 === -1) continue;
+            let c4 = line.indexOf(',', c3 + 1);
+            if (c4 === -1) continue;
+            let c5 = line.indexOf(',', c4 + 1);
+            if (c5 === -1) continue;
+            let c6 = line.indexOf(',', c5 + 1);
+            if (c6 === -1) continue;
+            let c7 = line.indexOf(',', c6 + 1);
+            if (c7 === -1) continue;
+            let c8 = line.indexOf(',', c7 + 1);
+            if (c8 === -1) continue;
+
+            const lon = parseFloat(line.slice(c4 + 1, c5));
+            const lat = parseFloat(line.slice(c5 + 1, c6));
+
+            if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
+              const locationName = line.slice(c6 + 1, c7).trim();
+              const crimeType = line.slice(c7 + 1, c8).trim();
+              const color = CRIME_COLORS[crimeType] || '#dc2626';
+
+              // Track category totals
+              crimeCategoryTotals[crimeType] = (crimeCategoryTotals[crimeType] || 0) + 1;
+
+              // Aggregate crimes per geographic location
+              const locKey = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+              let locObj = locationsMap.get(locKey);
+              if (!locObj) {
+                locObj = {
+                  lat,
+                  lon,
+                  locationName,
+                  total: 0,
+                  crimes: {}
+                };
+                locationsMap.set(locKey, locObj);
+
+                const gKey = getGridKey(lat, lon);
+                let bucket = spatialGrid.get(gKey);
+                if (!bucket) {
+                  bucket = [];
+                  spatialGrid.set(gKey, bucket);
+                }
+                bucket.push(locObj);
+              }
+              locObj.total++;
+              locObj.crimes[crimeType] = (locObj.crimes[crimeType] || 0) + 1;
+
+              // Add visual marker to canvas
+              const marker = L.circleMarker([lat, lon], {
+                renderer: canvasRenderer,
+                radius: currentRadius,
+                stroke: false,
+                fillColor: color,
+                fillOpacity: 0.08,
+                interactive: false
+              }).addTo(map);
+
+              markers.push({ marker, crimeType });
+            }
+          }
+        } catch (err) {
+          console.error(`Failed to load ${file}:`, err);
+        }
+      }
+
+      // Hook up All / None buttons
+      const btnAll = document.getElementById('btn-select-all');
+      const btnNone = document.getElementById('btn-select-none');
+      if (btnAll) btnAll.addEventListener('click', selectAllCategories);
+      if (btnNone) btnNone.addEventListener('click', selectNoneCategories);
+
+      updateLegendUI();
+    }
+
+    loadCrimeData();
+  </script>
+</body>
+</html>
+

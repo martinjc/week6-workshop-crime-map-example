@@ -1,7 +1,6 @@
 # South Wales Crime Map Visualisation
 
-An interactive web mapping project using [Leaflet.js](https://leafletjs.com/) as part of CompJ workshops
-to show different ideas for visualising point-based geographic data. These maps visualise a year's worth of street-level crime data across South Wales (September 2025 – September 2026). 
+An interactive web mapping project using [Leaflet.js](https://leafletjs.com/) as part of [CompJ workshops](https://github.com/CompJCDF/workshops26) to show different ideas for visualising point-based geographic data. These maps visualise a year's worth of street-level crime data across South Wales (September 2025 – September 2026). 
 
 The maps were all created by an LLM to illustrate how simple visualisations can be created with simple prompting. As such the code has not been reviewed for correctness or quality and is not considered as exemplar code. 
 
